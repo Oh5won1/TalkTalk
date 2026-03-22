@@ -1,58 +1,48 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PC TALK Final</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --main: #3c3e40; --yellow: #fee500; --bg: #abc1d1; }
         body { font-family: sans-serif; margin: 0; background: #f0f2f5; display: flex; justify-content: center; }
-        #app { width: 100%; max-width: 400px; height: 100vh; background: white; display: flex; flex-direction: column; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        #app { width: 100%; max-width: 400px; height: 100vh; background: white; display: flex; flex-direction: column; }
         .tab { flex: 1; overflow-y: auto; display: none; padding: 20px; }
         .tab.active { display: block; }
         .nav { display: flex; background: #f9f9f9; border-top: 1px solid #ddd; }
-        .nav button { flex: 1; padding: 15px; border: none; background: none; font-size: 20px; cursor: pointer; }
-        .item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-        .profile-img { width: 45px; height: 45px; border-radius: 15px; background: #ddd; margin-right: 12px; object-fit: cover; }
+        .nav button { flex: 1; padding: 15px; border: none; font-size: 20px; cursor: pointer; }
+        .item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+        .req-box { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd; }
         #chat-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 100; display: none; flex-direction: column; }
         #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 70%; padding: 8px 12px; border-radius: 10px; font-size: 14px; }
+        .msg { max-width: 70%; padding: 8px; border-radius: 8px; font-size: 14px; }
         .msg.me { align-self: flex-end; background: var(--yellow); }
         .msg.other { align-self: flex-start; background: white; }
     </style>
 </head>
 <body>
 <div id="app">
-    <div id="p-auth" class="tab active" style="text-align:center; padding-top:60px;">
-        <h2>PC TALK</h2>
-        <input type="text" id="uid" placeholder="아이디" style="width:80%; padding:10px; margin-bottom:10px;"><br>
-        <input type="password" id="upw" placeholder="비밀번호" style="width:80%; padding:10px; margin-bottom:20px;"><br>
-        <button onclick="login()" style="width:85%; padding:12px; background:var(--main); color:white; border:none; border-radius:5px;">로그인</button><br>
-        <button onclick="register()" style="margin-top:15px; background:none; border:none; color:gray; cursor:pointer;">회원가입</button>
+    <div id="p-auth" class="tab active" style="text-align:center; padding-top:100px;">
+        <h1>PC TALK</h1>
+        <input type="text" id="uid" placeholder="아이디"><br><br>
+        <input type="password" id="upw" placeholder="비밀번호"><br><br>
+        <button onclick="login()" style="width:80%; padding:10px; background:var(--main); color:white;">로그인</button><br>
+        <button onclick="register()" style="margin-top:10px; border:none; background:none; color:gray;">회원가입</button>
     </div>
 
     <div id="p-main" style="display:none; flex:1; flex-direction:column;">
         <div id="t-friends" class="tab active">
-            <h3 style="margin:0 0 15px 0;">친구 목록</h3>
-            <div style="display:flex; gap:5px; margin-bottom:15px;">
-                <input type="text" id="fSearch" placeholder="아이디 검색" style="flex:1; padding:8px;">
-                <button onclick="addFriend()">추가</button>
+            <div id="req-section"></div> <h4 style="margin:0 0 10px 0;">친구 추가</h4>
+            <div style="display:flex; gap:5px; margin-bottom:20px;">
+                <input type="text" id="fId" style="flex:1;"> <button onclick="sendReq()">요청</button>
             </div>
+            <h4 style="margin:0 0 10px 0;">친구 목록</h4>
             <div id="friend-list"></div>
         </div>
-        <div id="t-settings" class="tab">
-            <h3>내 프로필</h3>
-            <img id="my-pic" class="profile-img" style="width:80px; height:80px;"><br>
-            <input type="file" id="picInp" onchange="updateProfile()" style="display:none;">
-            <button onclick="document.getElementById('picInp').click()">사진 변경</button>
-            <p id="my-id-display" style="font-weight:bold;"></p>
-            <input type="text" id="statusInp" placeholder="상태메시지" style="width:80%; padding:8px;">
-            <button onclick="updateProfile()" style="margin-top:10px;">저장</button>
-        </div>
         <nav class="nav">
-            <button onclick="showTab('friends', this)" style="color:orange;">👤</button>
-            <button onclick="showTab('settings', this)">⚙️</button>
+            <button onclick="switchTab('friends', this)" style="color:orange;">👤</button>
+            <button onclick="location.reload()">🔄</button>
         </nav>
     </div>
 </div>
@@ -60,89 +50,68 @@
 <div id="chat-ui">
     <header style="padding:15px; background:var(--main); color:white; display:flex; justify-content:space-between;">
         <button onclick="document.getElementById('chat-ui').style.display='none'" style="color:white; background:none; border:none;">←</button>
-        <span id="target-name">대화</span>
-        <div style="width:20px;"></div>
+        <span id="c-target">대화</span><div></div>
     </header>
     <div id="messages"></div>
     <div style="padding:10px; background:white; display:flex;">
-        <input type="text" id="mInp" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:20px;" onkeypress="if(event.keyCode==13) sendMsg()">
-        <button onclick="sendMsg()" style="margin-left:5px; background:var(--yellow); border:none; padding:10px; border-radius:10px;">전송</button>
+        <input type="text" id="mInp" style="flex:1; padding:10px;" onkeypress="if(event.keyCode==13) sendMsg()">
+        <button onclick="sendMsg()" style="background:var(--yellow); border:none; padding:10px;">전송</button>
     </div>
 </div>
 
 <script>
-    const socket = io(); let me = null; let room = "";
+    const socket = io(); let me = null; let curRoom = "";
     async function register() {
-        const userId = document.getElementById('uid').value;
-        const password = document.getElementById('upw').value;
-        const res = await fetch('/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId, password})});
+        const res = await fetch('/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:uid.value, password:upw.value})});
         const d = await res.json(); alert(d.message);
     }
     async function login() {
-        const userId = document.getElementById('uid').value;
-        const password = document.getElementById('upw').value;
-        const res = await fetch('/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId, password})});
+        const res = await fetch('/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:uid.value, password:upw.value})});
         const d = await res.json();
         if(d.success) {
             me = d.user;
             document.getElementById('p-auth').style.display = 'none';
             document.getElementById('p-main').style.display = 'flex';
-            document.getElementById('my-id-display').innerText = me.userId;
-            document.getElementById('my-pic').src = me.profilePic || 'https://via.placeholder.com/80';
-            renderFriends();
+            renderMain();
         } else alert(d.message);
     }
-    function showTab(t, b) {
-        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-        document.getElementById('t-'+t).classList.add('active');
-        document.querySelectorAll('.nav button').forEach(x => x.style.color = 'black');
-        b.style.color = 'orange';
+    function renderMain() {
+        // 친구 목록 출력
+        document.getElementById('friend-list').innerHTML = me.friends.map(f => `<div class="item" onclick="openChat('${f}')">${f}</div>`).join('');
+        // 요청 목록 출력
+        const reqSect = document.getElementById('req-section');
+        if(me.pendingRequests.length > 0) {
+            reqSect.innerHTML = me.pendingRequests.map(id => `
+                <div class="req-box">${id}님이 친구 요청! 
+                <button onclick="handle('${id}', 'accept')">수락</button>
+                <button onclick="handle('${id}', 'reject')">거절</button></div>`).join('');
+        } else { reqSect.innerHTML = ""; }
     }
-    async function addFriend() {
-        const friendId = document.getElementById('fSearch').value;
-        const res = await fetch('/add-friend', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:me.userId, friendId})});
-        const d = await res.json();
-        if(d.success) { alert("추가 성공!"); location.reload(); } else alert(d.message);
+    async function sendReq() {
+        const res = await fetch('/send-request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:me.userId, friendId:fId.value})});
+        const d = await res.json(); alert(d.message);
     }
-    function renderFriends() {
-        document.getElementById('friend-list').innerHTML = me.friends.map(f => `
-            <div class="item" onclick="openChat('${f}')"><div class="profile-img"></div>${f}</div>
-        `).join('');
+    async function handle(requesterId, action) {
+        const res = await fetch('/handle-request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:me.userId, requesterId, action})});
+        const d = await res.json(); if(d.success) location.reload();
     }
-    function openChat(fId) {
-        room = [me.userId, fId].sort().join('_');
-        socket.emit('join_room', room);
-        document.getElementById('target-name').innerText = fId;
+    function openChat(f) {
+        curRoom = [me.userId, f].sort().join('_');
+        socket.emit('join_room', curRoom);
+        document.getElementById('c-target').innerText = f;
         document.getElementById('chat-ui').style.display = 'flex';
         document.getElementById('messages').innerHTML = "";
     }
     function sendMsg() {
-        const content = document.getElementById('mInp').value;
-        if(content) {
-            socket.emit('send_message', { room, userId:me.userId, content });
-            document.getElementById('mInp').value = "";
-        }
+        const content = mInp.value;
+        if(content) { socket.emit('send_message', { room:curRoom, userId:me.userId, content }); mInp.value = ""; }
     }
     socket.on('receive_message', d => {
         const div = document.createElement('div');
         div.className = `msg ${d.userId === me.userId ? 'me' : 'other'}`;
         div.innerText = d.content;
         document.getElementById('messages').appendChild(div);
-        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
     });
-    async function updateProfile() {
-        const file = document.getElementById('picInp').files[0];
-        const statusMsg = document.getElementById('statusInp').value;
-        let profilePic = me.profilePic;
-        const send = async (p) => {
-            await fetch('/update-profile', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:me.userId, profilePic:p, statusMsg})});
-            alert("저장 완료!"); location.reload();
-        };
-        if(file) {
-            const r = new FileReader(); r.readAsDataURL(file);
-            r.onload = () => send(r.result);
-        } else send(profilePic);
-    }
 </script>
 </body>
 </html>
