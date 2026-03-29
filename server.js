@@ -2,7 +2,6 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
-const path = require('path');
 const OpenAI = require("openai");
 
 const app = express();
@@ -12,7 +11,7 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-// 1. Qwen AI (Groq) 설정
+// 1. AI 설정 (Groq Cloud)
 const groq = new OpenAI({
     apiKey: "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",
     baseURL: "https://api.groq.com/openai/v1"
@@ -22,7 +21,7 @@ const groq = new OpenAI({
 const MONGO_URI = "mongodb+srv://dhttmddnjs704:mack1234@cluster0.znnzv5q.mongodb.net/myTalkDB?retryWrites=true&w=majority";
 mongoose.connect(MONGO_URI).then(() => console.log("✅ MongoDB 연결 성공"));
 
-// 3. 데이터 모델 설정
+// 3. 데이터 모델
 const User = mongoose.model('User', new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -42,7 +41,7 @@ const Message = mongoose.model('Message', new mongoose.Schema({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-// --- HTTP API ---
+// --- API ---
 app.post('/login', async (req, res) => {
     const user = await User.findOne(req.body);
     if (user) res.json({ success: true, user });
@@ -80,7 +79,7 @@ app.post('/handle-request', async (req, res) => {
     res.json({ success: true });
 });
 
-// --- 소켓 로직 (AI 통합 버전) ---
+// --- 소켓 로직 (AI 통합) ---
 io.on('connection', (socket) => {
     socket.on('join_room', async (room) => {
         socket.join(room);
@@ -89,11 +88,11 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', async (data) => {
-        // 1. 메시지 DB 저장 및 전송
+        // 1. 내 메시지 전송 및 저장
         await new Message(data).save();
         io.to(data.room).emit('receive_message', data);
 
-        // 2. @bot 감지 시 AI 답변 생성
+        // 2. @bot 감지 시 AI 답장
         if (data.content.startsWith("@bot")) {
             const prompt = data.content.replace("@bot", "").trim();
             try {
@@ -112,7 +111,6 @@ io.on('connection', (socket) => {
                     senderLang: "ko"
                 };
                 
-                // AI 답변도 저장 및 전송
                 await new Message(aiReply).save();
                 io.to(data.room).emit('receive_message', aiReply);
             } catch (err) {
