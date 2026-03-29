@@ -11,7 +11,7 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-// 1. AI 설정 (Groq Cloud)
+// 1. AI 설정
 const groq = new OpenAI({
     apiKey: "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",
     baseURL: "https://api.groq.com/openai/v1"
@@ -41,7 +41,7 @@ const Message = mongoose.model('Message', new mongoose.Schema({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-// --- API ---
+// --- HTTP API ---
 app.post('/login', async (req, res) => {
     const user = await User.findOne(req.body);
     if (user) res.json({ success: true, user });
@@ -88,11 +88,11 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', async (data) => {
-        // 1. 내 메시지 전송 및 저장
+        // 1. 사용자 메시지 전송 및 저장
         await new Message(data).save();
         io.to(data.room).emit('receive_message', data);
 
-        // 2. @bot 감지 시 AI 답장
+        // 2. @bot 감지 시 AI 답변 생성 (Socket으로 직접 처리)
         if (data.content.startsWith("@bot")) {
             const prompt = data.content.replace("@bot", "").trim();
             try {
@@ -111,10 +111,11 @@ io.on('connection', (socket) => {
                     senderLang: "ko"
                 };
                 
+                // AI 답변 저장 및 채팅방에 전송
                 await new Message(aiReply).save();
                 io.to(data.room).emit('receive_message', aiReply);
             } catch (err) {
-                console.error("AI Error:", err);
+                console.error("AI 오류 발생:", err.message);
             }
         }
     });
