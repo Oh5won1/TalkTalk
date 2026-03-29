@@ -6,56 +6,36 @@ const OpenAI = require("openai");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { 
-    maxHttpBufferSize: 1e8,
-    cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
-// 1. AI 설정
 const groq = new OpenAI({
     apiKey: "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",
     baseURL: "https://api.groq.com/openai/v1"
 });
 
-// 2. MongoDB 연결
-const MONGO_URI = "mongodb+srv://dhttmddnjs704:mack1234@cluster0.znnzv5q.mongodb.net/myTalkDB?retryWrites=true&w=majority";
-mongoose.connect(MONGO_URI).then(() => console.log("✅ MongoDB 연결 성공"));
+mongoose.connect("mongodb+srv://dhttmddnjs704:mack1234@cluster0.znnzv5q.mongodb.net/myTalkDB").then(() => console.log("DB OK"));
 
-// 3. 데이터 모델
 const User = mongoose.model('User', new mongoose.Schema({
-    userId: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    profilePic: { type: String, default: "" },
-    statusMsg: { type: String, default: "반가워요!" },
-    language: { type: String, default: "ko" },
-    friends: [String],
-    pendingRequests: [String]
+    userId: String, password: { type: String, required: true }, profilePic: String, statusMsg: String, language: { type: String, default: "ko" }, friends: [String], pendingRequests: [String]
 }));
 
 const Message = mongoose.model('Message', new mongoose.Schema({
-    room: String, userId: String, content: String,
-    senderLang: { type: String, default: "ko" },
-    timestamp: { type: Date, default: Date.now }
+    room: String, userId: String, content: String, senderLang: String, timestamp: { type: Date, default: Date.now }
 }));
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(__dirname));
 
-// --- HTTP API ---
 app.post('/login', async (req, res) => {
     const user = await User.findOne(req.body);
-    if (user) res.json({ success: true, user });
-    else res.json({ success: false });
+    res.json({ success: !!user, user });
 });
 
 app.post('/register', async (req, res) => {
-    try {
-        const { userId, password } = req.body;
-        const exists = await User.findOne({ userId });
-        if (exists) return res.json({ success: false, message: "아이디 중복" });
-        await new User({ userId, password }).save();
-        res.json({ success: true });
-    } catch(e) { res.json({ success: false }); }
+    const exists = await User.findOne({ userId: req.body.userId });
+    if (exists) return res.json({ success: false });
+    await new User(req.body).save();
+    res.json({ success: true });
 });
 
 app.post('/update-profile', async (req, res) => {
@@ -63,62 +43,30 @@ app.post('/update-profile', async (req, res) => {
     res.json({ success: true });
 });
 
-app.post('/send-request', async (req, res) => {
-    await User.findOneAndUpdate({ userId: req.body.friendId }, { $addToSet: { pendingRequests: req.body.userId } });
-    res.json({ success: true });
-});
-
-app.post('/handle-request', async (req, res) => {
-    const { userId, requesterId, action } = req.body;
-    if (action === 'accept') {
-        await User.findOneAndUpdate({ userId }, { $addToSet: { friends: requesterId }, $pull: { pendingRequests: requesterId } });
-        await User.findOneAndUpdate({ userId: requesterId }, { $addToSet: { friends: userId } });
-    } else {
-        await User.findOneAndUpdate({ userId }, { $pull: { pendingRequests: requesterId } });
-    }
-    res.json({ success: true });
-});
-
-// --- 소켓 로직 (AI 통합) ---
 io.on('connection', (socket) => {
     socket.on('join_room', async (room) => {
         socket.join(room);
-        const logs = await Message.find({ room }).sort({ timestamp: 1 }).limit(50);
+        const logs = await Message.find({ room }).sort({ timestamp: 1 }).limit(30);
         socket.emit('chat_logs', logs);
     });
 
     socket.on('send_message', async (data) => {
-        // 1. 사용자 메시지 전송 및 저장
         await new Message(data).save();
         io.to(data.room).emit('receive_message', data);
 
-        // 2. @bot 감지 시 AI 답변 생성 (Socket으로 직접 처리)
         if (data.content.startsWith("@bot")) {
             const prompt = data.content.replace("@bot", "").trim();
             try {
-                const completion = await groq.chat.completions.create({
-                    messages: [
-                        { role: "system", content: "너는 친절한 Qwen AI야. 한국어로 짧고 명확하게 답해줘." },
-                        { role: "user", content: prompt }
-                    ],
+                const chat = await groq.chat.completions.create({
+                    messages: [{ role: "user", content: prompt }],
                     model: "qwen-2.5-32b",
                 });
-                
-                const aiReply = {
-                    room: data.room,
-                    userId: "🤖 AI봇",
-                    content: completion.choices[0].message.content,
-                    senderLang: "ko"
-                };
-                
-                // AI 답변 저장 및 채팅방에 전송
-                await new Message(aiReply).save();
-                io.to(data.room).emit('receive_message', aiReply);
-            } catch (err) {
-                console.error("AI 오류 발생:", err.message);
-            }
+                const aiMsg = { room: data.room, userId: "🤖 AI봇", content: chat.choices[0].message.content, senderLang: "ko" };
+                await new Message(aiMsg).save();
+                io.to(data.room).emit('receive_message', aiMsg);
+            } catch (e) { console.log("AI Error"); }
         }
     });
 });
 
-server.listen(process.env.PORT || 10000, () => console.log("🚀 서버 가동 중"));
+server.listen(process.env.PORT || 10000);
