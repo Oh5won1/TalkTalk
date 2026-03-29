@@ -3,130 +3,217 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PC TALK</title>
+    <title>Global PC TALK</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --main: #3c3e40; --yellow: #fee500; --bg: #abc1d1; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: sans-serif; background: #eee; height: 100vh; display: flex; justify-content: center; align-items: center; }
-
-        /* 메인 윈도우 크기 고정 */
-        .window { width: 360px; height: 620px; background: white; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); overflow: hidden; display: none; flex-direction: column; }
-        .active { display: flex; }
-
-        /* 로그인 섹션 */
-        #p-auth { padding: 40px 20px; text-align: center; justify-content: center; }
-        .logo { font-size: 32px; font-weight: bold; color: var(--main); margin-bottom: 40px; }
-        input { width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px; outline: none; }
-        button { width: 100%; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 6px; }
-        .btn-login { background: var(--yellow); }
-        .btn-reg { background: #f5f5f5; border: 1px solid #ddd; }
-
-        /* 리스트 섹션 */
-        header { padding: 15px; background: #f9f9f9; font-weight: bold; border-bottom: 1px solid #eee; }
-        .list-item { padding: 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; align-items: center; }
-        .list-item:hover { background: #f8f8f8; }
-        .profile-img { width: 40px; height: 40px; background: #ddd; border-radius: 14px; margin-right: 12px; }
-
-        /* 채팅 섹션 */
-        #p-chat { background: var(--bg); }
-        .chat-head { padding: 12px; background: var(--main); color: white; display: flex; align-items: center; }
-        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 1.4; }
+        body { font-family: sans-serif; margin: 0; background: #f0f2f5; display: flex; justify-content: center; }
+        #app { width: 100%; max-width: 400px; height: 100vh; background: white; display: flex; flex-direction: column; position: relative; }
+        .tab { flex: 1; overflow-y: auto; display: none; padding: 20px; }
+        .tab.active { display: block; }
+        .nav { display: flex; background: #f9f9f9; border-top: 1px solid #ddd; }
+        .nav button { flex: 1; padding: 15px; border: none; font-size: 20px; cursor: pointer; background: none; }
+        .profile-card { text-align: center; padding: 30px 0; border-bottom: 1px solid #eee; }
+        .circle-img { width: 100px; height: 100px; border-radius: 40px; object-fit: cover; background: #eee; cursor: pointer; }
+        .item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #f9f9f9; cursor: pointer; }
+        .thumb { width: 45px; height: 45px; border-radius: 15px; margin-right: 12px; background: #ddd; object-fit: cover; }
+        #chat-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 100; display: none; flex-direction: column; }
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 75%; padding: 8px 12px; border-radius: 10px; font-size: 14px; position: relative; }
         .msg.me { align-self: flex-end; background: var(--yellow); }
         .msg.other { align-self: flex-start; background: white; }
-        .input-box { display: flex; padding: 10px; background: white; gap: 5px; }
-        .input-box input { margin: 0; }
-        .input-box button { width: 60px; margin: 0; background: var(--yellow); }
+        .trans-text { display: block; margin-top: 4px; border-top: 1px dashed #ccc; padding-top: 4px; color: #333; }
+        .original-text { font-size: 11px; color: #777; }
     </style>
 </head>
 <body>
-
-    <div id="p-auth" class="window active">
-        <div class="logo">PC TALK</div>
-        <input type="text" id="uid" placeholder="아이디">
-        <input type="password" id="upw" placeholder="비밀번호">
-        <button class="btn-login" onclick="login()">로그인</button>
-        <button class="btn-reg" onclick="register()">계역 만들기</button>
+<div id="app">
+    <div id="p-auth" class="tab active" style="text-align:center; padding-top:100px;">
+        <h1>PC TALK</h1>
+        <input type="text" id="uid" placeholder="아이디" style="width:80%; padding:10px; margin-bottom:10px;"><br>
+        <input type="password" id="upw" placeholder="비밀번호" style="width:80%; padding:10px; margin-bottom:20px;"><br>
+        <button onclick="login()" style="width:85%; padding:12px; background:var(--main); color:white; border:none; border-radius:5px;">로그인</button><br>
+        <button onclick="register()" style="margin-top:15px; background:none; border:none; color:gray;">회원가입</button>
     </div>
 
-    <div id="p-main" class="window">
-        <header>대화창</header>
-        <div class="list-item" onclick="openChat('global_room', '전체 대화방')">
-            <div class="profile-img"></div>
-            <b>전체 대화방 입장하기</b>
+    <div id="p-main" style="display:none; flex:1; flex-direction:column;">
+        <div id="t-friends" class="tab active">
+            <div id="req-list"></div>
+            <h4 style="margin:0 0 10px 0;">친구 추가</h4>
+            <div style="display:flex; gap:5px; margin-bottom:20px;">
+                <input type="text" id="fId" style="flex:1; padding:8px;"> <button onclick="sendReq()">요청</button>
+            </div>
+            <h4 style="margin:0 0 10px 0;">친구 목록</h4>
+            <div id="friend-list"></div>
         </div>
+        
+        <div id="t-settings" class="tab">
+            <div class="profile-card">
+                <img id="my-pic" class="circle-img" onclick="document.getElementById('picInp').click()">
+                <input type="file" id="picInp" style="display:none;" onchange="previewImg(this)">
+                <h2 id="display-id" style="margin:10px 0;"></h2>
+                <input type="text" id="statusInp" placeholder="상태 메시지" style="width:80%; padding:8px; border:none; border-bottom:1px solid #ddd; text-align:center;"><br><br>
+                <label>🌐 나의 언어 설정</label><br>
+                <select id="langSel" style="width:85%; padding:10px; margin-top:5px;">
+                    <option value="ko">한국어 (Korean)</option>
+                    <option value="en">영어 (English)</option>
+                    <option value="ja">일본어 (Japanese)</option>
+                    <option value="zh">중국어 (Chinese)</option>
+                    <option value="es">스페인어 (Spanish)</option>
+                </select><br><br>
+                <button onclick="saveProfile()" style="padding:10px 30px; background:var(--main); color:white; border:none; border-radius:5px;">저장</button>
+                <button onclick="logout()" style="padding:10px; margin-left:5px;">로그아웃</button>
+            </div>
+        </div>
+
+        <nav class="nav">
+            <button onclick="showTab('friends', this)" style="color:orange;">👤</button>
+            <button onclick="showTab('settings', this)">⚙️</button>
+        </nav>
     </div>
+</div>
 
-    <div id="p-chat" class="window">
-        <div class="chat-head">
-            <button onclick="goBack()" style="background:none; border:none; color:white; font-size:18px; cursor:pointer; width:30px;">◀</button>
-            <span id="chat-title" style="margin-left:10px;"></span>
-        </div>
-        <div id="messages"></div>
-        <div class="input-box">
-            <input type="text" id="mInp" onkeypress="if(event.keyCode==13) sendMsg()">
-            <button onclick="sendMsg()">전송</button>
-        </div>
+<div id="chat-ui">
+    <header style="padding:15px; background:var(--main); color:white; display:flex; justify-content:space-between; align-items:center;">
+        <button onclick="document.getElementById('chat-ui').style.display='none'" style="color:white; background:none; border:none; font-size:20px;">←</button>
+        <span id="chat-title">대화중</span><div></div>
+    </header>
+    <div id="messages"></div>
+    <div style="padding:10px; background:white; display:flex;">
+        <input type="text" id="mInp" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:20px;" onkeypress="if(event.keyCode==13) sendMsg()">
+        <button onclick="sendMsg()" style="background:var(--yellow); border:none; padding:10px 15px; border-radius:20px; margin-left:5px;">전송</button>
     </div>
+</div>
 
-    <script>
-        const socket = io();
-        let me = null;
-        let curRoom = "";
+<script>
+    const socket = io(); let me = null; let curRoom = "";
 
-        function showPage(id) {
-            document.querySelectorAll('.window').forEach(w => w.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-        }
-
-        async function login() {
-            const res = await fetch('/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: uid.value, password: upw.value })
-            });
+    // [1] 자동 로그인 & 초기화
+    window.onload = async () => {
+        const saved = localStorage.getItem('talkUser');
+        if(saved) {
+            const res = await fetch('/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:saved });
             const d = await res.json();
-            if (d.success) { me = d.user; showPage('p-main'); }
-            else alert("로그인 실패");
+            if(d.success) { me = d.user; startApp(); }
         }
+    }
 
-        async function register() {
-            const res = await fetch('/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: uid.value, password: upw.value })
-            });
-            const d = await res.json(); alert(d.success ? "가입 성공" : "가입 실패");
+    async function login() {
+        const body = JSON.stringify({userId:uid.value, password:upw.value});
+        const res = await fetch('/login', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+        const d = await res.json();
+        if(d.success) { me = d.user; localStorage.setItem('talkUser', body); startApp(); }
+        else alert(d.message);
+    }
+
+    async function register() {
+        const res = await fetch('/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:uid.value, password:upw.value})});
+        const d = await res.json(); alert(d.message);
+    }
+
+    function startApp() {
+        document.getElementById('p-auth').style.display = 'none';
+        document.getElementById('p-main').style.display = 'flex';
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('friend-list').innerHTML = me.friends.map(f => `<div class="item" onclick="openChat('${f}')"><div class="thumb"></div>${f}</div>`).join('');
+        document.getElementById('req-list').innerHTML = me.pendingRequests.map(id => `<div style="background:#fff9c4; padding:10px; border-radius:5px; margin-bottom:10px;">${id}님의 요청 <button onclick="handle('${id}','accept')">수락</button></div>`).join('');
+        document.getElementById('display-id').innerText = me.userId;
+        document.getElementById('statusInp').value = me.statusMsg;
+        document.getElementById('langSel').value = me.language || 'ko';
+        document.getElementById('my-pic').src = me.profilePic || 'https://via.placeholder.com/100';
+    }
+
+    // [2] 프로필 관리
+    function previewImg(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => document.getElementById('my-pic').src = e.target.result;
+            reader.readAsDataURL(input.files[0]);
         }
+    }
 
-        function openChat(room, title) {
-            curRoom = room;
-            document.getElementById('chat-title').innerText = title;
-            document.getElementById('messages').innerHTML = "";
-            socket.emit('join_room', room);
-            showPage('p-chat');
+    async function saveProfile() {
+        const profilePic = document.getElementById('my-pic').src;
+        const statusMsg = document.getElementById('statusInp').value;
+        const language = document.getElementById('langSel').value;
+        await fetch('/update-profile', { 
+            method:'POST', headers:{'Content-Type':'application/json'}, 
+            body:JSON.stringify({userId:me.userId, profilePic, statusMsg, language})
+        });
+        me.language = language;
+        alert("저장되었습니다!");
+    }
+
+    // [3] 친구 및 채팅 로직
+    async function sendReq() {
+        await fetch('/send-request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:me.userId, friendId:fId.value})});
+        alert("요청 보냄");
+    }
+
+    async function handle(requesterId, action) {
+        await fetch('/handle-request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:me.userId, requesterId, action})});
+        location.reload();
+    }
+
+    function openChat(f) {
+        curRoom = [me.userId, f].sort().join('_');
+        document.getElementById('chat-title').innerText = f;
+        document.getElementById('chat-ui').style.display = 'flex';
+        document.getElementById('messages').innerHTML = "";
+        socket.emit('join_room', curRoom);
+    }
+
+    // [4] 번역 엔진 (무료 MyMemory API 활용)
+    async function translateText(text, from, to) {
+        if (from === to) return text;
+        try {
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`);
+            const data = await res.json();
+            return data.responseData.translatedText;
+        } catch { return text; }
+    }
+
+    function sendMsg() {
+        if(mInp.value) { 
+            socket.emit('send_message', { room:curRoom, userId:me.userId, content:mInp.value, senderLang:me.language }); 
+            mInp.value = ""; 
         }
+    }
 
-        function goBack() { showPage('p-main'); }
+    socket.on('chat_logs', (logs) => {
+        logs.forEach(msg => appendMsg(msg));
+    });
 
-        function sendMsg() {
-            const text = mInp.value.trim();
-            if (!text) return;
-            socket.emit('send_message', { room: curRoom, userId: me.userId, content: text });
-            mInp.value = "";
+    socket.on('receive_message', d => appendMsg(d));
+
+    async function appendMsg(d) {
+        const div = document.createElement('div');
+        div.className = `msg ${d.userId === me.userId ? 'me' : 'other'}`;
+        
+        let contentHtml = `<span>${d.content}</span>`;
+        
+        // 내가 아닌 다른 사람의 메시지가 내 언어와 다를 때 번역 수행
+        if (d.userId !== me.userId && d.senderLang !== me.language) {
+            const translated = await translateText(d.content, d.senderLang, me.language);
+            contentHtml = `<span class="original-text">${d.content}</span><span class="trans-text">🌐 ${translated}</span>`;
         }
+        
+        div.innerHTML = contentHtml;
+        const msgBox = document.getElementById('messages');
+        msgBox.appendChild(div);
+        msgBox.scrollTop = msgBox.scrollHeight;
+    }
 
-        socket.on('chat_logs', logs => logs.forEach(m => appendMsg(m)));
-        socket.on('receive_message', data => { if (data.room === curRoom) appendMsg(data); });
-
-        function appendMsg(data) {
-            const div = document.createElement('div');
-            div.className = `msg ${data.userId === me.userId ? 'me' : 'other'}`;
-            div.innerHTML = `<b>${data.userId}</b><br>${data.content}`;
-            document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = messages.scrollHeight;
-        }
-    </script>
+    function showTab(t, btn) {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.getElementById('t-'+t).classList.add('active');
+        document.querySelectorAll('.nav button').forEach(x => x.style.color = 'black');
+        btn.style.color = 'orange';
+    }
+    function logout() { localStorage.removeItem('talkUser'); location.reload(); }
+</script>
 </body>
 </html>
