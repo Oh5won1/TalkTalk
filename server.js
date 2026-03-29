@@ -18,11 +18,11 @@ const groq = new OpenAI({
     baseURL: "https://api.groq.com/openai/v1"
 });
 
-// 2. MongoDB 연결 (본인 계정 정보 확인)
+// 2. MongoDB 연결
 const MONGO_URI = "mongodb+srv://dhttmddnjs704:mack1234@cluster0.znnzv5q.mongodb.net/myTalkDB?retryWrites=true&w=majority";
 mongoose.connect(MONGO_URI).then(() => console.log("✅ MongoDB 연결 성공"));
 
-// 3. 데이터베이스 모델
+// 3. 데이터 모델
 const User = mongoose.model('User', new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -42,34 +42,13 @@ const Message = mongoose.model('Message', new mongoose.Schema({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-// --- API 경로 설정 ---
-
-// [중요] AI 답변 생성 API
-app.post('/ask-ai', async (req, res) => {
-    try {
-        const { prompt } = req.body;
-        const completion = await groq.chat.completions.create({
-            messages: [
-                { role: "system", content: "너는 친절한 Qwen AI야. 한국어로 짧고 명확하게 답해줘." },
-                { role: "user", content: prompt }
-            ],
-            model: "qwen-2.5-32b",
-        });
-        res.json({ success: true, answer: completion.choices[0].message.content });
-    } catch (e) {
-        console.error(e);
-        res.json({ success: false, message: "AI 응답 실패" });
-    }
-});
-
+// --- API 경로 ---
 app.post('/register', async (req, res) => {
-    try {
-        const { userId, password } = req.body;
-        const exists = await User.findOne({ userId });
-        if (exists) return res.json({ success: false, message: "중복된 아이디" });
-        await new User({ userId, password }).save();
-        res.json({ success: true });
-    } catch(e) { res.json({ success: false }); }
+    const { userId, password } = req.body;
+    const exists = await User.findOne({ userId });
+    if (exists) return res.json({ success: false, message: "아이디 중복" });
+    await new User({ userId, password }).save();
+    res.json({ success: true });
 });
 
 app.post('/login', async (req, res) => {
@@ -99,16 +78,44 @@ app.post('/handle-request', async (req, res) => {
     res.json({ success: true });
 });
 
-// --- 소켓 로직 ---
+// --- 소켓 로직 (AI 포함) ---
 io.on('connection', (socket) => {
     socket.on('join_room', async (room) => {
         socket.join(room);
         const logs = await Message.find({ room }).sort({ timestamp: 1 }).limit(50);
         socket.emit('chat_logs', logs);
     });
+
     socket.on('send_message', async (data) => {
+        // 1. 일반 메시지 저장 및 전송
         await new Message(data).save();
         io.to(data.room).emit('receive_message', data);
+
+        // 2. 만약 @bot으로 시작하면 AI가 답장하도록 처리
+        if (data.content.startsWith("@bot")) {
+            const prompt = data.content.replace("@bot", "").trim();
+            try {
+                const completion = await groq.chat.completions.create({
+                    messages: [
+                        { role: "system", content: "너는 친절한 Qwen AI야. 한국어로 짧고 명확하게 답해줘." },
+                        { role: "user", content: prompt }
+                    ],
+                    model: "qwen-2.5-32b",
+                });
+                
+                const aiReply = {
+                    room: data.room,
+                    userId: "🤖 AI봇",
+                    content: completion.choices[0].message.content,
+                    senderLang: "ko"
+                };
+                
+                await new Message(aiReply).save();
+                io.to(data.room).emit('receive_message', aiReply);
+            } catch (e) {
+                console.error("AI Error:", e);
+            }
+        }
     });
 });
 
