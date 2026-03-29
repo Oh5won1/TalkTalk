@@ -2,32 +2,45 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Global AI PC TALK</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --main: #3c3e40; --yellow: #fee500; --bg: #abc1d1; }
-        body { margin: 0; font-family: sans-serif; background: #eee; height: 100vh; display: flex; flex-direction: column; }
-        #chat-ui { display: none; flex-direction: column; height: 100%; background: var(--bg); }
+        body { margin: 0; font-family: sans-serif; }
+        .page { display: none; height: 100vh; flex-direction: column; }
+        .active { display: flex; }
+        #friends-list div { padding: 15px; border-bottom: 1px solid #ddd; cursor: pointer; }
+        #chat-ui { background: var(--bg); }
         #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 80%; padding: 10px; border-radius: 10px; font-size: 14px; }
+        .msg { max-width: 80%; padding: 10px; border-radius: 10px; }
         .msg.me { align-self: flex-end; background: var(--yellow); }
         .msg.other { align-self: flex-start; background: white; }
-        .input-area { display: flex; padding: 10px; background: white; gap: 5px; }
-        input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
-        button { padding: 10px 20px; background: var(--yellow); border: none; cursor: pointer; font-weight: bold; }
+        .input-area { display: flex; padding: 10px; background: white; }
+        input { flex: 1; padding: 10px; }
     </style>
 </head>
 <body>
-    <div id="auth-ui" style="padding: 50px; text-align: center;">
+
+    <div id="p-auth" class="page active" style="align-items:center; justify-content:center;">
         <h1>PC TALK</h1>
-        <input type="text" id="uid" placeholder="ID"><br><br>
-        <input type="password" id="upw" placeholder="PW"><br><br>
+        <input type="text" id="uid" placeholder="ID"><br>
+        <input type="password" id="upw" placeholder="PW"><br>
         <button onclick="login()">로그인</button>
-        <button onclick="register()">가입</button>
+        <button onclick="register()">회원가입</button>
     </div>
 
-    <div id="chat-ui">
+    <div id="p-main" class="page">
+        <header style="padding:15px; background:#eee; font-weight:bold;">친구 목록</header>
+        <div id="friends-list">
+            <div onclick="openChat('AI_Bot_Room', '🤖 AI 대화방')">🤖 AI봇과 대화하기</div>
+        </div>
+    </div>
+
+    <div id="p-chat" class="page">
+        <header style="padding:15px; background:var(--main); color:white;">
+            <button onclick="goBack()" style="color:white; background:none; border:none;">◀ 뒤로</button>
+            <span id="chat-title"></span>
+        </header>
         <div id="messages"></div>
         <div class="input-area">
             <input type="text" id="mInp" placeholder="@bot 질문하기..." onkeypress="if(event.keyCode==13) sendMsg()">
@@ -38,7 +51,12 @@
     <script>
         const socket = io();
         let me = null;
-        let curRoom = "global_room"; // 테스트용 기본 방
+        let curRoom = "";
+
+        function showPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
 
         async function login() {
             const res = await fetch('/login', {
@@ -49,42 +67,44 @@
             const d = await res.json();
             if (d.success) {
                 me = d.user;
-                document.getElementById('auth-ui').style.display = 'none';
-                document.getElementById('chat-ui').style.display = 'flex';
-                socket.emit('join_room', curRoom);
-            } else alert("실패");
+                showPage('p-main'); // 로그인 성공 시 메인(친구목록)으로 이동
+            } else alert("로그인 실패");
         }
 
         async function register() {
-            await fetch('/register', {
+            const res = await fetch('/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: uid.value, password: upw.value })
             });
-            alert("가입 완료");
+            const d = await res.json();
+            alert(d.success ? "가입 성공" : "가입 실패");
         }
 
-        function sendMsg() {
-            const inp = document.getElementById('mInp');
-            const text = inp.value.trim();
-            if (!text) return;
+        function openChat(room, title) {
+            curRoom = room;
+            document.getElementById('chat-title').innerText = title;
+            document.getElementById('messages').innerHTML = "";
+            socket.emit('join_room', room);
+            showPage('p-chat'); // 친구 클릭 시 채팅창으로 이동
+        }
 
-            // 핵심: fetch 없이 오직 소켓으로만 보냄
-            socket.emit('send_message', {
-                room: curRoom,
-                userId: me.userId,
-                content: text,
-                senderLang: "ko"
-            });
-            inp.value = "";
+        function goBack() { showPage('p-main'); }
+
+        function sendMsg() {
+            const text = mInp.value.trim();
+            if (!text) return;
+            socket.emit('send_message', { room: curRoom, userId: me.userId, content: text });
+            mInp.value = "";
         }
 
         socket.on('receive_message', (data) => {
+            if (data.room !== curRoom) return;
             const div = document.createElement('div');
             div.className = `msg ${data.userId === me.userId ? 'me' : 'other'}`;
             div.innerHTML = `<b>${data.userId}</b><br>${data.content}`;
             document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            document.getElementById('messages').scrollTop = messages.scrollHeight;
         });
     </script>
 </body>
