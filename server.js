@@ -7,10 +7,10 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-mongoose.connect("mongodb+srv://dhttmddnjs704:mack1234@cluster0.znnzv5q.mongodb.net/myTalkDB").then(() => console.log("✅ DB OK"));
+mongoose.connect("mongodb+srv://dhttmddnjs704:mack1234@cluster0.znnzv5q.mongodb.net/myTalkDB").then(() => console.log("✅ DB Connected"));
 
 const User = mongoose.model('User', new mongoose.Schema({
-    userId: String, password: { type: String, required: true }, friends: [String]
+    userId: String, password: { type: String, required: true }
 }));
 const Message = mongoose.model('Message', new mongoose.Schema({
     room: String, userId: String, content: String, timestamp: { type: Date, default: Date.now }
@@ -37,7 +37,6 @@ io.on('connection', (socket) => {
         const logs = await Message.find({ room }).sort({ timestamp: 1 }).limit(50);
         socket.emit('chat_logs', logs);
     });
-
     socket.on('send_message', async (data) => {
         await new Message(data).save();
         io.to(data.room).emit('receive_message', data);
