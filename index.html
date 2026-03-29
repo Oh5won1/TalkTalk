@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Global AI PC TALK</title>
+    <title>Global PC TALK</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --main: #3c3e40; --yellow: #fee500; --bg: #abc1d1; }
@@ -26,13 +26,13 @@
         <input type="text" id="uid" placeholder="ID"><br>
         <input type="password" id="upw" placeholder="PW"><br>
         <button onclick="login()">로그인</button>
-        <button onclick="register()">회원가입</button>
+        <button onclick="register()">가입</button>
     </div>
 
     <div id="p-main" class="page">
         <header style="padding:15px; background:#eee; font-weight:bold;">친구 목록</header>
         <div id="friends-list">
-            <div onclick="openChat('AI_Bot_Room', '🤖 AI 대화방')">🤖 AI봇과 대화하기</div>
+            <div onclick="openChat('global_room', '전체 대화방')">👥 전체 대화방 입중하기</div>
         </div>
     </div>
 
@@ -43,7 +43,7 @@
         </header>
         <div id="messages"></div>
         <div class="input-area">
-            <input type="text" id="mInp" placeholder="@bot 질문하기..." onkeypress="if(event.keyCode==13) sendMsg()">
+            <input type="text" id="mInp" onkeypress="if(event.keyCode==13) sendMsg()">
             <button onclick="sendMsg()">전송</button>
         </div>
     </div>
@@ -65,10 +65,8 @@
                 body: JSON.stringify({ userId: uid.value, password: upw.value })
             });
             const d = await res.json();
-            if (d.success) {
-                me = d.user;
-                showPage('p-main'); // 로그인 성공 시 메인(친구목록)으로 이동
-            } else alert("로그인 실패");
+            if (d.success) { me = d.user; showPage('p-main'); }
+            else alert("로그인 실패");
         }
 
         async function register() {
@@ -86,7 +84,7 @@
             document.getElementById('chat-title').innerText = title;
             document.getElementById('messages').innerHTML = "";
             socket.emit('join_room', room);
-            showPage('p-chat'); // 친구 클릭 시 채팅창으로 이동
+            showPage('p-chat');
         }
 
         function goBack() { showPage('p-main'); }
@@ -98,14 +96,16 @@
             mInp.value = "";
         }
 
-        socket.on('receive_message', (data) => {
-            if (data.room !== curRoom) return;
+        socket.on('chat_logs', logs => logs.forEach(m => appendMsg(m)));
+        socket.on('receive_message', data => { if (data.room === curRoom) appendMsg(data); });
+
+        function appendMsg(data) {
             const div = document.createElement('div');
             div.className = `msg ${data.userId === me.userId ? 'me' : 'other'}`;
             div.innerHTML = `<b>${data.userId}</b><br>${data.content}`;
             document.getElementById('messages').appendChild(div);
             document.getElementById('messages').scrollTop = messages.scrollHeight;
-        });
+        }
     </script>
 </body>
 </html>
