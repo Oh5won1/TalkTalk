@@ -22,7 +22,7 @@ const groq = new OpenAI({
 const MONGO_URI = "mongodb+srv://dhttmddnjs704:mack1234@cluster0.znnzv5q.mongodb.net/myTalkDB?retryWrites=true&w=majority";
 mongoose.connect(MONGO_URI).then(() => console.log("✅ MongoDB 연결 성공"));
 
-// 3. 데이터 모델
+// 3. 데이터 모델 설정
 const User = mongoose.model('User', new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -42,19 +42,21 @@ const Message = mongoose.model('Message', new mongoose.Schema({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-// --- API 경로 ---
-app.post('/register', async (req, res) => {
-    const { userId, password } = req.body;
-    const exists = await User.findOne({ userId });
-    if (exists) return res.json({ success: false, message: "아이디 중복" });
-    await new User({ userId, password }).save();
-    res.json({ success: true });
-});
-
+// --- HTTP API ---
 app.post('/login', async (req, res) => {
     const user = await User.findOne(req.body);
     if (user) res.json({ success: true, user });
     else res.json({ success: false });
+});
+
+app.post('/register', async (req, res) => {
+    try {
+        const { userId, password } = req.body;
+        const exists = await User.findOne({ userId });
+        if (exists) return res.json({ success: false, message: "아이디 중복" });
+        await new User({ userId, password }).save();
+        res.json({ success: true });
+    } catch(e) { res.json({ success: false }); }
 });
 
 app.post('/update-profile', async (req, res) => {
@@ -78,7 +80,7 @@ app.post('/handle-request', async (req, res) => {
     res.json({ success: true });
 });
 
-// --- 소켓 로직 (AI 포함) ---
+// --- 소켓 로직 (AI 통합 버전) ---
 io.on('connection', (socket) => {
     socket.on('join_room', async (room) => {
         socket.join(room);
@@ -87,11 +89,11 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', async (data) => {
-        // 1. 일반 메시지 저장 및 전송
+        // 1. 메시지 DB 저장 및 전송
         await new Message(data).save();
         io.to(data.room).emit('receive_message', data);
 
-        // 2. 만약 @bot으로 시작하면 AI가 답장하도록 처리
+        // 2. @bot 감지 시 AI 답변 생성
         if (data.content.startsWith("@bot")) {
             const prompt = data.content.replace("@bot", "").trim();
             try {
@@ -110,10 +112,11 @@ io.on('connection', (socket) => {
                     senderLang: "ko"
                 };
                 
+                // AI 답변도 저장 및 전송
                 await new Message(aiReply).save();
                 io.to(data.room).emit('receive_message', aiReply);
-            } catch (e) {
-                console.error("AI Error:", e);
+            } catch (err) {
+                console.error("AI Error:", err);
             }
         }
     });
